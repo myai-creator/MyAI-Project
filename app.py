@@ -1,43 +1,48 @@
 import streamlit as st
-import random
+import requests
 
+# 1. Настройка внешнего вида страницы
 st.set_page_config(page_title="ИИ Ассистент НИИ", page_icon="🤖", layout="centered")
 st.title("🤖 Мой ИИ Ассистент")
-st.write("Задайте любой вопрос, и Ассистент Нова ответит вам!")
+st.write("Задайте абсолютно любой вопрос, и Ассистент Нова ответит вам!")
 
+# 2. Инициализация истории сообщений
 if "messages" not in st.session_state:
     st.session_state.messages = [
-        {"role": "assistant", "content": "Привет! Я ваш автономный ИИ-помощник Нова. Я научился генерировать ответы без интернета! О чем хотите поговорить?"}
+        {"role": "assistant", "content": "Привет! Я ваш всезнающий ИИ-помощник Нова. Теперь я подключен к большой нейросети и могу ответить абсолютно на любой ваш вопрос! О чем поговорим?"}
     ]
 
+# 3. Отображение истории сообщений
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
         st.markdown(message["content"])
 
+# 4. Поле ввода для пользователя
 if user_query := st.chat_input("Напишите сообщение..."):
     with st.chat_message("user"):
         st.markdown(user_query)
     
     st.session_state.messages.append({"role": "user", "content": user_query})
 
+    # Запрос к настоящей нейросети
     with st.chat_message("assistant"):
-        with st.spinner("Ассистент Нова генерирует ответ..."):
-            
-            q = user_query.lower()
-            
-            # Логика автономного генератора ответов
-            if "стих" in q or "поэзия" in q or "рифм" in q:
-                poems = [
-                    f"В стенах НИИ родился свет,\n\nИИ принес нам свой ответ.\n\nЗапрос '{user_query}' летит вперед,\n\nНаука движется в полет!",
-                    f"Провод, плата, быстрый ум —\n\nВыше всех научных дум.\n\nВы спросили про 'ИИ',\n\nМы раскроем тайны все свои!"
-                ]
-                ai_response = random.choice(poems)
-            elif "привет" in q or "пр " in q or "здравствуй" in q:
-                ai_response = "Приветствую вас! Я готов к решению сложнейших задач нашего НИИ. Что мы будем исследовать сегодня?"
-            elif "как дела" in q or "что делаешь" in q:
-                ai_response = "Мои процессоры работают на полную мощность, анализируя ваши запросы. Всё отлично! Какое задание дадите?"
-            else:
-                ai_response = f"Ваш запрос '{user_query}' успешно принят автономной матрицей Ассистента Нова. В рамках исследований нашего НИИ это открывает огромные перспективы для анализа данных. Напишите подробнее, какую задачу мы решим?"
+        with st.spinner("Ассистент Нова думает..."):
+            try:
+                # Отправляем запрос к открытому и бесплатному серверу текстовой нейросети
+                import urllib.parse
+                safe_query = urllib.parse.quote(user_query)
+                api_url = f"https://pollinations.ai{safe_query}"
+                
+                # Добавляем заголовки, чтобы сервер Streamlit не блокировал соединение
+                headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"}
+                response = requests.get(api_url, headers=headers, timeout=20)
+                
+                if response.status_code == 200 and response.text:
+                    ai_response = response.text
+                else:
+                    ai_response = "Сервер ИИ сейчас немного занят, пожалуйста, повторите ваш вопрос еще раз!"
+            except Exception as e:
+                ai_response = "Произошла заминка при подключении к сети. Попробуйте отправить сообщение повторно."
 
             st.markdown(ai_response)
             
