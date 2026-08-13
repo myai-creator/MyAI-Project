@@ -1,16 +1,14 @@
 import streamlit as st
 import requests
-import json
 
 st.set_page_config(page_title="Всезнающий Ассистент Нова", page_icon="🤖", layout="centered")
 st.title("🤖 Всезнающий Ассистент Нова")
-st.write("Задайте абсолютно любой вопрос обо всем на свете, и нейросеть Google Gemini ответит вам!")
-
-# ВАШ ЛИЧНЫЙ КЛЮЧ ИЗ GOOGLE AI STUDIO УЖЕ ВСТАВЛЕН СЮДА!
-GOOGLE_API_KEY = "AQ.Ab8RN6LR3IrkzXfgvWiwYT-3iYQMzfN7cdJ_pP9bl5_zbSRwQw"
+st.write("Задайте абсолютно любой вопрос обо всем на свете, и Ассистент Нова подробно ответит вам!")
 
 if "messages" not in st.session_state:
-    st.session_state.messages = [{"role": "assistant", "content": "Привет! Я Ассистент Нова. Теперь я знаю весь интернет! Спросите меня о чем угодно, и я подробно отвечу."}]
+    st.session_state.messages = [
+        {"role": "assistant", "content": "Привет! Я ваш всезнающий Ассистент Нова. Теперь я знаю весь интернет! О чем поговорим?"}
+    ]
 
 for message in st.session_state.messages:
     with st.chat_message(message["role"]):
@@ -24,18 +22,18 @@ if user_query := st.chat_input("Напишите сообщение..."):
     with st.chat_message("assistant"):
         with st.spinner("Нова ищет ответ во всем интернете..."):
             try:
-                # Отправляем запрос напрямую к официальному серверу Google Gemini с вашим ключом
-                url = f"https://googleapis.com{GOOGLE_API_KEY}"
-                headers = {'Content-Type': 'application/json'}
-                data = {"contents": [{"parts":[{"text": user_query + " (Отвечай строго на русском языке)"}]}]}
+                # Надежный открытый шлюз к нейросетевой модели
+                import urllib.parse
+                encoded_text = urllib.parse.quote(user_query)
+                url = f"https://pollinations.ai{encoded_text}"
                 
-                response = requests.post(url, headers=headers, json=data, timeout=20)
-                if response.status_code == 200:
-                    ai_response = response.json()['candidates'][0]['content']['parts'][0]['text']
+                response = requests.get(url, timeout=25)
+                if response.status_code == 200 and response.text:
+                    ai_response = response.text
                 else:
-                    ai_response = "Сервер ИИ временно задумался. Пожалуйста, повторите ваш вопрос через секунду!"
+                    ai_response = "Сервер взял небольшую паузу. Пожалуйста, отправьте сообщение еще раз!"
             except Exception as e:
-                ai_response = "Техническая заминка. Пожалуйста, отправьте сообщение повторно."
+                ai_response = "Произошла сетевая заминка. Повторите попытку, пожалуйста."
 
             st.markdown(ai_response)
             
