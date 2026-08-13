@@ -1,6 +1,5 @@
 import streamlit as st
 import requests
-import json
 
 # 1. Настройка внешнего вида страницы
 st.set_page_config(page_title="ИИ Ассистент НИИ", page_icon="🤖", layout="centered")
@@ -31,19 +30,14 @@ if user_query := st.chat_input("Напишите сообщение..."):
     with st.chat_message("assistant"):
         with st.spinner("Ассистент Нова думает..."):
             try:
-                # Отправляем запрос к бесплатной нейросети через открытый API-интерфейс
-                api_url = "https://openrouter.ai"
-                headers = {"Content-Type": "application/json"}
-                data = {
-                    "model": "google/gemini-2.5-flash",
-                    "messages": [{"role": m["role"], "content": m["content"]} for m in st.session_state.messages]
-                }
-                response = requests.post(api_url, headers=headers, data=json.dumps(data), timeout=15)
+                # Отправляем запрос к бесплатному и надежному серверу ИИ
+                api_url = f"https://pollinations.ai{user_query}"
+                response = requests.get(api_url, timeout=15)
                 
                 if response.status_code == 200:
-                    ai_response = response.json()["choices"][0]["message"]["content"]
+                    ai_response = response.text
                 else:
-                    ai_response = "Система приняла запрос, но сервер временно перегружен. Попробуйте еще раз!"
+                    ai_response = "Сервер ИИ взял паузу. Пожалуйста, отправьте сообщение еще раз!"
             except Exception as e:
                 ai_response = "Не удалось подключиться к нейросети. Проверьте интернет на устройстве."
 
