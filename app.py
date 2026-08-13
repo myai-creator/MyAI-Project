@@ -23,18 +23,29 @@ if user_query := st.chat_input("Напишите сообщение..."):
     with st.chat_message("assistant"):
         with st.spinner("Ассистент Нова думает..."):
             try:
-                # Прямой и стабильный запрос к текстовой нейросети
-                api_url = f"https://pollinations.ai{user_query}"
-                response = requests.get(api_url, timeout=15)
+                # Используем стабильную открытую модель Qwen через бесплатный API Hugging Face
+                API_URL = "https://huggingface.co"
+                payload = {
+                    "inputs": user_query,
+                    "parameters": {"max_new_tokens": 500, "return_full_text": False}
+                }
+                response = requests.post(API_URL, json=payload, timeout=20)
                 
                 if response.status_code == 200:
-                    ai_response = response.text
+                    res_json = response.json()
+                    # Проверяем формат ответа
+                    if isinstance(res_json, list) and "generated_text" in res_json[0]:
+                        ai_response = res_json[0]["generated_text"]
+                    elif isinstance(res_json, dict) and "generated_text" in res_json:
+                        ai_response = res_json["generated_text"]
+                    else:
+                        ai_response = str(res_json)
                 else:
-                    ai_response = "Сервер временно перегружен. Попробуйте еще раз!"
+                    # Если модель загружается в память сервера, она просит подождать пару секунд
+                    ai_response = "ИИ просыпается и загружает базу данных. Пожалуйста, повторите этот вопрос еще раз через 5 секунд!"
             except Exception as e:
-                ai_response = "Не удалось подключиться. Проверьте интернет."
+                ai_response = "Произошел технический сбой при связи с сервером. Попробуйте еще раз."
 
             st.markdown(ai_response)
             
     st.session_state.messages.append({"role": "assistant", "content": ai_response})
-    
