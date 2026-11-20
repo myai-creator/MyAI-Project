@@ -1,114 +1,117 @@
-import streamlit as st
-import math
-import re
 
-# 1. Настройка внешнего вида страницы
-st.set_page_config(page_title="Усовершенствованный Ассистент Нова", page_icon="🤖", layout="centered")
-st.title("🤖 Усовершенствованный Ассистент Нова")
-st.write("Моя автономная матрица знаний обновлена! Я умею считать сложные логарифмы, решать математику и знаю всё про историю, космос и Brawl Stars.")
+import asyncio
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, JSONResponse
+from aiogram import Bot, Dispatcher, types
+from groq import Groq
+from duckduckgo_search import DDGS
 
-# 2. Инициализация памяти чата
-if "messages" not in st.session_state:
-    st.session_state.messages = [
-        {"role": "assistant", "content": "Привет! Я ваш автономный супер-ассистент Нова. Мой мозг усовершенствован и работает без интернета! Напишите мне математический пример (например, log(27)), имя исторического деятеля или слово 'бравл'!"}
-    ]
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 
-# 3. Вывод истории сообщений
-for msg in st.session_state.messages:
-    with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+app = FastAPI()
+client = Groq(api_key=GROQ_API_KEY)
+bot = Bot(token=TELEGRAM_TOKEN)
+dp = Dispatcher()
 
-# 4. Поле ввода для пользователя
-if user_query := st.chat_input("Напишите абсолютно любой вопрос..."):
-    with st.chat_message("user"):
-        st.markdown(user_query)
-    st.session_state.messages.append({"role": "user", "content": user_query})
+def search_web(query: str) -> str:
+    try:
+        results = DDGS().text(query, max_results=4)
+        if not results:
+            return ""
+        return "\n".join([f"- {r['title']}: {r['body']}" for r in results])
+    except Exception:
+        return ""
 
-    with st.chat_message("assistant"):
-        with st.spinner("Нова вычисляет ответ в усовершенствованном ядре..."):
-            
-            q = user_query.lower()
-            ai_response = ""
-            
-            # --- 1. УМНЫЙ МАТЕМАТИЧЕСКИЙ ПРОЦЕССОР (ЛОГАРИФМЫ И ПРИМЕРЫ) ---
-            if "log" in q or "логарифм" in q or "ln" in q:
-                # Извлекаем числа из запроса с помощью регулярных выражений
-                numbers = [float(x) for x in re.findall(r'\d+\.\d+|\d+', q)]
-                
-                if numbers:
-                    num = numbers[0]
-                    if num > 0:
-                        log10_val = round(math.log10(num), 4)
-                        ln_val = round(math.log(num), 4)
-                        
-                        # Особый случай для логарифма по основанию 3 (например, log3(27) = 3)
-                        if "3" in q and num == 27:
-                            log_base3 = "3.0 (так как 3³ = 27)"
-                        else:
-                            log_base3 = round(math.log(num, 3), 4)
-                            
-                        ai_response = (
-                            f"📊 МАТЕМАТИЧЕСКИЙ РАСЧЕТ ДЛЯ ЧИСЛА {int(num) if num.is_integer() else num}:\n\n"
-                            f"• Десятичный логарифм $\\log_{{10}}({int(num)}) = {log10_val}$\n"
-                            f"• Натуральный логарифм $\\ln({int(num)}) = {ln_val}$\n"
-                            f"• Логарифм по основанию 3: {log_base3}\n\n"
-                            f"*Расчет выполнен мгновенно встроенным процессором Python без использования интернета!*"
-                        )
-                    else:
-                        ai_response = "❌ Ошибка: Логарифм можно вычислить только для чисел больше 0!"
-                else:
-                    ai_response = "Я готов посчитать логарифм! Напишите, например: log(27), log(28) или натуральный логарифм 100."
+def ask_omnai(user_text: str) -> str:
+    web_context = search_web(user_text)
+    system_prompt = (
+        "Ты — Omnai, продвинутый суперассистент нового поколения. "
+        "Отвечай чётко, умно и по делу. Используй свежие данные из поиска ниже, если они подходят к вопросу.\n\n"
+        f"Актуальные данные из интернета:\n{web_context}"
+    )
+    completion = client.chat.completions.create(
+        model="llama-3.3-70b-versatile",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_text}
+        ],
+        temperature=0.7,
+        max_tokens=2048
+    )
+    return completion.choices[0].message.content
 
-            # Обычный калькулятор (сложение, вычитание, умножение, деление)
-            elif any(op in q for op in ["+", "-", "*", "/", "сколько будет", "посчитай"]):
-                clean_q = re.sub(r'[^0-9\+\-\*\/\.\(\)]', '', q)
-                try:
-                    if clean_q:
-                        result = eval(clean_q)
-                        ai_response = f"🔢 МАТЕМАТИЧЕСКИЙ ОТВЕТ:\n\nВыражение: {clean_q}\nРезультат = {result}"
-                except:
-                    pass
+@dp.message()
+async def handle_tg_message(message: types.Message):
+    if not message.text:
+        return
+    await bot.send_chat_action(message.chat.id, "typing")
+    reply = await asyncio.to_thread(ask_omnai, message.text)
+    await message.answer(reply)
 
-            # --- 2. РАСШИРЕННЫЙ УЧЕБНИК ИСТОРИИ И СССР ---
-            if not ai_response:
-                if any(word in q for word in ["сталин", "иосиф", "джугашвили"]):
-                    ai_response = (
-                        "📜 ИСТОРИЧЕСКАЯ СПРАВКА: ИОСИФ СТАЛИН\n\n"
-                        "• Кто это: Государственный и военный деятель, руководитель СССР с конца 1920-х годов до 1953 года.\n"
-                        "• Роль в истории: Возглавлял Советский Союз в период масштабной индустриализации, создания мощной промышленности и во время Великой Отечественной войны (1941–1945).\n"
-                        "• Военные годы: Являлся Председателем Государственного Комитета Обороны и Верховным главнокомандующим Вооружёнными Силами СССР. Под его стратегическим руководством советский народ разгромил нацистскую Германию в мае 1945 года."
-                    )
-                elif any(word in q for word in ["ленин", "владимир", "ульянов"]):
-                    ai_response = (
-                        "📜 ИСТОРИЧЕСКАЯ СПРАВКА: ВЛАДИМИР ЛЕНИН\n\n"
-                        "• Кто это: Революционер, главный организатор Октябрьской революции 1917 года и основатель первого в мире социалистического государства — СССР.\n"
-                        "• Факты: Был главой первого советского правительства. Его идеи марксизма-ленинизма кардинально изменили историю XX века."
-                    )
-                elif any(word in q for word in ["мировая", "войн", "1945", "1941", "1939", "великая отечественная"]):
-                    ai_response = (
-                        "📜 ВТОРАЯ МИРОВАЯ ВОЙНА (1939–1945):\n\n"
-                        "• Масштаб: Крупнейший и самый тяжелый конфликт в истории человечества, длившийся ровно 6 лет (с 1 сентября 1939 года по 2 сентября 1945 года).\n"
-                        "• Великая Отечественная война: Началась 22 июня 1941 года с вероломного нападения Германии на СССР.\n"
-                        "• Переломные битвы: Сталинградская битва и Курская дуга навсегда сломали хребет фашистской армии. Война завершилась в мае 1945 года полным взятием Берлина и водружением Знамени Победы над Рейхстагом."
-                    )
-                elif any(word in q for word in ["ссср", "советский союз"]):
-                    ai_response = (
-                        "🚩 СОВЕТСКИЙ СОЮЗ (СССР):\n\n"
-                        "Союз Советских Социалистических Республик существовал с 1922 по 1991 год. "
-                        "Это была величайшая сверхдержава, которая первой в мире запустила искусственный спутник Земли (1957) и отправила человека в космос — Юрия Гагарина (12 апреля 1961 года)."
-                    )
+@app.on_event("startup")
+async def on_startup():
+    asyncio.create_task(dp.start_polling(bot))
 
-                # --- 3. ИГРОВОЙ ГИД BRAWL STARS ---
-                elif any(word in q for word in ["бравл", "brawl", "персонаж", "боец", "герой", "игра", "леон", "эдгар", "шелли"]):
-                    ai_response = (
-                        "🎮 УДОБНЫЙ ГИД ПО БОЙЦАМ BRAWL STARS:\n\n"
-                        "• Леон (Легендарный): Самый хитрый боец. Кидает сюрикены, а его Супер делает его полностью невидимым для всех врагов на карте, позволяя незаметно подкрадываться со спины!\n"
-                        "• Эдгар (Эпический): Любимчик игроков ближнего боя. Его Супер автоматически заряжается со временем. Эдгар прыгает через любые стены прямо на врага и восстанавливает себе здоровье при каждом ударе бинтами!\n"
-                        "• Шелли (Начальный): Настоящая гроза ближних дистанций. Если накопить её Супер, она выпускает мощнейший залп из дробовика, который сносит укрытия, ломает стены и уничтожает любого врага в упор.\n"
-                        "• Кольт: Скорострельный стрелок, выпускающий длинную точную очередь пуль на огромную дистанцию.\n"
-                        "• Спайк: Кидает кактусы, которые взрываются и разлетаются острыми иголками во все стороны."
-                    )
-                elif "стих" in q or "поэзия" in q or "рифм" in q:
-                    ai_response = "В стенах НИИ родился свет,\n\nАссистент Нова принес ответ.\n\nЗапрос летит вперед,\n\nНаука движется в полет!"
-                elif any(word in q for word in ["привет", "пр ", "здравствуй", "ку"]):
-                    ai_response = "Приветствую! Я усовершенствованный Ассистент Нова. Мой автономный код активирован и готов считать примеры, логарифмы или рассказывать про историю и Brawl Stars!"
+@app.post("/api/chat")
+async def web_chat(request: Request):
+    data = await request.json()
+    reply = await asyncio.to_thread(ask_omnai, data.get("message", ""))
+    return JSONResponse({"reply": reply})
+
+@app.get("/manifest.json")
+async def manifest():
+    return JSONResponse({
+        "name": "Omnai AI",
+        "short_name": "Omnai",
+        "start_url": "/",
+        "display": "standalone",
+        "background_color": "#0f172a",
+        "theme_color": "#0f172a"
+    })
+
+@app.get("/", response_class=HTMLResponse)
+async def home():
+    return """
+    <!DOCTYPE html>
+    <html lang="ru">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Omnai — Суперассистент</title>
+        <link rel="manifest" href="/manifest.json">
+        <style>
+            body { margin: 0; font-family: system-ui, sans-serif; background: #0f172a; color: #f8fafc; display: flex; flex-direction: column; height: 100vh; }
+            header { padding: 16px; text-align: center; font-size: 20px; font-weight: bold; background: #1e293b; border-bottom: 1px solid #334155; }
+            #chat { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+            .msg { max-width: 80%; padding: 12px 16px; border-radius: 16px; line-height: 1.5; white-space: pre-wrap; }
+            .user { align-self: flex-end; background: #3b82f6; color: white; }
+            .bot { align-self: flex-start; background: #1e293b; border: 1px solid #334155; }
+            form { display: flex; padding: 12px; background: #1e293b; gap: 8px; }
+            input { flex: 1; padding: 12px; border-radius: 12px; border: 1px solid #334155; background: #0f172a; color: white; font-size: 16px; }
+            button { padding: 12px 20px; border-radius: 12px; border: none; background: #3b82f6; color: white; font-weight: bold; cursor: pointer; }
+        </style>
+    </head>
+    <body>
+        <header>✨ Omnai AI (Web + App)</header>
+        <div id="chat"><div class="msg bot">Привет! Я Omnai с доступом в реальный интернет. Спрашивай что угодно!</div></div>
+[21.11.2026 01:16] Саша: <form id="form">
+            <input id="input" placeholder="Напиши запрос..." autocomplete="off" required />
+            <button type="submit">Отправить</button>
+        </form>
+        <script>
+            const form = document.getElementById('form'), input = document.getElementById('input'), chat = document.getElementById('chat');
+            form.onsubmit = async (e) => {
+                e.preventDefault();
+                const text = input.value; input.value = '';
+                chat.innerHTML += <div class="msg user">${text}</div>;
+                const botDiv = document.createElement('div'); botDiv.className = 'msg bot'; botDiv.textContent = 'Ищу в интернете и думаю...';
+                chat.appendChild(botDiv); chat.scrollTop = chat.scrollHeight;
+                const res = await fetch('/api/chat', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message: text}) });
+                const data = await res.json();
+                botDiv.textContent = data.reply; chat.scrollTop = chat.scrollHeight;
+            };
+        </script>
+    </body>
+    </html>
+    """
